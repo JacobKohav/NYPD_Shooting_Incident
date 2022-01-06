@@ -1,0 +1,122 @@
+---
+title: "Analysis: NYPD Shooting Incident"
+author: "Kohav, J."
+date: "08 January 2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+<!-- Setup -->
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+# Import (Data)
+```{r nypd_imported}
+nypd_data <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+nypd_data
+summary(nypd_data)
+```
+
+# Clean (Data)
+```{r nypd_clean}
+# Remove: Columns
+nypd_data_clean <- nypd_data %>% select(-c(X_COORD_CD:Lon_Lat))
+nypd_data_clean <- nypd_data_clean %>% select(-c(PRECINCT, JURISDICTION_CODE))
+
+# Change: Format
+nypd_data_clean <- nypd_data_clean %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE))
+nypd_data_clean <- nypd_data_clean %>% mutate(OCCUR_TIME = hms(OCCUR_TIME))
+```
+
+# Analysis (Preliminary)
+```{r data_preparation}
+nypd_data_clean %>% group_by(LOCATION_DESC) %>% summarize()
+nypd_data_clean %>% group_by(VIC_AGE_GROUP) %>% summarize()
+nypd_data_clean %>% group_by(VIC_RACE) %>% summarize()
+nypd_data_clean %>% group_by(BORO) %>% summarize()
+
+```
+# Analysis
+```{r summary_preliminary}
+
+# Summary: (Setting: Cases)
+nypd_data_clean %>% group_by(LOCATION_DESC) %>% summarize(Cases = n())
+
+# Summary: (Setting: Age)
+nypd_data_clean %>% group_by(LOCATION_DESC) %>% summarize ("<18" = sum(VIC_AGE_GROUP == "<18"), "18-24" = sum(VIC_AGE_GROUP == "18-24"), "25-44" = sum(VIC_AGE_GROUP == "25-44"), "45-64" = sum(VIC_AGE_GROUP == "45-64"), "65+" = sum(VIC_AGE_GROUP == "65+"))
+
+# Summary: (Setting: Race)
+nypd_data_clean %>% group_by(LOCATION_DESC) %>% summarize ("NATIVE" = sum(VIC_RACE == "AMERICAN INDIAN/ALASKAN NATIVE"), "ASIAN" = sum(VIC_RACE == "ASIAN / PACIFIC ISLANDER"), "BLACK" = sum(VIC_RACE == "BLACK"), "BLACK (Hispanic)" = sum(VIC_RACE == "BLACK HISPANIC"), "WHITE" = sum(VIC_RACE == "WHITE"), "WHITE (Hispanic))" = sum(VIC_RACE == "WHITE HISPANIC"))
+
+# Summary: (Setting: Gender)
+nypd_data_clean %>% group_by(LOCATION_DESC) %>% summarize ("MALE" = sum(VIC_SEX == "M"), "FEMALE" = sum(VIC_SEX == "F"))  
+```
+
+# Visualization (Initial)
+```{r visualization_initial}
+# Visualize (Setting: Age)
+nypd_data_clean %>% ggplot(aes(x = LOCATION_DESC, y = VIC_AGE_GROUP)) +
+  geom_line(aes(color = "LOCATION_DESC")) +
+  geom_point(aes(color = "LOCATION_DESC")) +
+  theme(legend.position="bottom", axis.text.x = element_text(angle = 90)) +
+  labs(title = "Setting versus Age Group (Victim)", y = NULL)
+
+# Visualize (Setting: Race)
+nypd_data_clean %>% ggplot(aes(x = LOCATION_DESC, y = VIC_RACE)) +
+  geom_line(aes(color = "LOCATION_DESC")) +
+  geom_point(aes(color = "LOCATION_DESC")) +
+  theme(legend.position="bottom", axis.text.x = element_text(angle = 90)) +
+  labs(title = "Setting versus Race (Victim)", y = NULL)
+
+# Visualize (Setting: Gender)
+nypd_data_clean %>% ggplot(aes(x = LOCATION_DESC, y = VIC_SEX)) +
+  geom_line(aes(color = "LOCATION_DESC")) +
+  geom_point(aes(color = "LOCATION_DESC")) +
+  theme(legend.position="bottom", axis.text.x = element_text(angle = 90)) +
+  labs(title = "Setting versus Gender (Victim)", y = NULL)
+```
+
+# Transformation (Data: Post-visualization/analysis) (i.e. analysis, additional)
+```{r data_transformed}
+# Extract (Month)
+nypd_data_transformed <- nypd_data_clean %>% mutate (OCCUR_MONTH = as.integer((month(OCCUR_DATE))))
+
+# Calculate (Season)
+nypd_data_transformed <- nypd_data_transformed %>% mutate (SEASON = ifelse(OCCUR_MONTH >=3 & OCCUR_MONTH <= 5, "SPRING", ifelse(OCCUR_MONTH >=6 & OCCUR_MONTH <= 8, "SUMMER",ifelse(OCCUR_MONTH >=9 & OCCUR_MONTH <= 11, "FALL", ifelse(OCCUR_MONTH == 12 | OCCUR_MONTH <= 2, "WINTER", "")))))
+
+# Group (By: Season)
+nypd_data_grouped_season <- nypd_data_transformed %>% group_by(SEASON) %>% summarize(STATISTICAL_MURDER_FLAG_TRUE = sum(ifelse(STATISTICAL_MURDER_FLAG == TRUE, 1, 0)), STATISTICAL_MURDER_FLAG_FALSE = sum(ifelse(STATISTICAL_MURDER_FLAG == FALSE, 1, 0)))
+
+nypd_data_grouped_season
+```
+
+# Visualization (Post-analysis; post-transformation)
+```{r visualized_2}
+nypd_data_grouped_season %>% ggplot(aes(x = SEASON, y = STATISTICAL_MURDER_FLAG_TRUE)) +
+  geom_line(aes(color = "TRUE")) +
+  geom_point(aes(color = "TRUE")) +
+  geom_line(aes(y = STATISTICAL_MURDER_FLAG_FALSE, color = "FALSE")) +
+  geom_point(aes(y = STATISTICAL_MURDER_FLAG_FALSE, color = "FALSE")) + 
+  theme(legend.position="bottom", axis.text.x = element_text(angle = 90)) +
+  labs(title = "Season versus Rate of Murder", y = NULL)
+```
+
+# Identification (Bias)
+Sources of bias in the data include:
+  (1.) Errors in the data's collection (stemming from potential perceived bias of the recorder).
+  (2.) Errors in the data's reporting (for example: a certain area is more likely to report the a crime which may go unreported in another area).
+  
+Bias (Personal):
+(1.) Personal bias includes assumptions made by the researcher about the data such as the characteristics of its source, including its validity.
+(2.) Assumptions about the data's meaning (for example, race may be measured subjectively, rather than on a scientifically-based classification).
+
+# Summary and Conclusion
+In this analysis, we are able to tell whether the setting of a crime is related to the victim’s age, race, or gender. After graphing these results, it is possible to see that some specific ages are more likely to be involved in a crime in a certain setting. Similarly, specific races and genders are more likely to be involved in a a crime in a certain setting.
+
+Following this, we are able to use to data to determine the season during which the criminal activities took place. With this information, we once more graph the data and see that the type of crime is potentially related to the season in which it took place.
+
+In conclusion, the NYPD data indicates that a victim’s age, race, or gender may be related to the crime’s setting, while the type of crime may be related to the season in which it took place. 
